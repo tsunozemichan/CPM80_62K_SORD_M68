@@ -160,6 +160,7 @@ boot:	;simplest case is to just perform parameter initialization
 		CALL SIO_INIT
 		CALL CRT_INIT
 		CALL KBD_INIT
+		CALL CTC_INIT	;initialize CTC
 		PUSH AF
 		PUSH HL
 		LD HL,OPENMSG
@@ -251,63 +252,7 @@ READ_LOOP_WBOOT1:
 
 		JP gocpm ; CP/Mを再起動
 
-; wboot:	;simplest case is to read the disk until all sectors loaded
-; 		LD	SP, 80h	;use space below buffer for stack
-; 		LD	C, 0	;select disk 0
-; 		CALL	seldsk
-; 		CALL	home	;go to track 00
-; ;
-; 		LD	B, nsects	;b counts * of sectors to load
-; 		LD	C, 0	;c has the current track number
-; 		LD	D, 2	;d has the next sector to read
-; ;	note that we begin by reading track 0, sector 2 since sector 1
-; ;	contains the cold start loader, which is skipped in a warm start
-; 		LD	HL, ccp	;base of cp/m (initial load point)
-; load1:	;load	one more sector
-; 		PUSH	BC	;save sector count, current track
-; 		PUSH	DE	;save next sector to read
-; 		PUSH	HL	;save dma address
-; 		LD	C, D	;get sector address to register C
-; 		CALL	setsec	;set sector address from register C
-; 		POP	BC	;recall dma address to b, C
-; 		PUSH	BC	;replace on stack for later recall
-; 		CALL	setdma	;set dma address from b, C
-; ;
-; ;	drive set to 0, track set, sector set, dma address set
-; 		CALL	read
-; 		CP	00h	;any errors?
-; 		JP	NZ,wboot	;retry the entire boot if an error occurs
-; ;
-; ;	no error, move to next sector
-; 		POP	HL	;recall dma address
-; 		LD	DE, 128	;dma=dma+128
-; 		ADD	HL,DE	;new dma address is in h, l
-; 		POP	DE	;recall sector address
-; 		POP	BC	;recall number of sectors remaining, and current trk
-; 		DEC	B	;sectors=sectors-1
-; 		JP	Z,gocpm	;transfer to cp/m if all have been loaded
-; ;
-; ;	more	sectors remain to load, check for track change
-; 		INC	D
-; 		LD	A,D	;sector=27?, if so, change tracks
-; 		CP	27
-; 		JP	C,load1	;carry generated if sector<27
-; ;
-; ;	end of	current track,	go to next track
-; 		LD	D, 1	;begin with first sector of next track
-; 		INC	C	;track=track+1
-; ;
-; ;	save	register state, and change tracks
-; 		PUSH	BC
-; 		PUSH	DE
-; 		PUSH	HL
-; 		CALL	settrk	;track address set from register c
-; 		POP	HL
-; 		POP	DE
-; 		POP	BC
-; 		JP	load1	;for another sector
-;
-;
+
 ;*****************************************************
 ;*                                                   *
 ;*	20ms Interrupt Handler (Empty for now)      *
@@ -320,6 +265,7 @@ INT_20MS:
 		PUSH	HL
 		;
 		; TODO: Add your 20ms interrupt processing here
+		CALL KEY_SCAN_LAP
 		;
 		POP	HL
 		POP	DE
@@ -451,9 +397,6 @@ seldsk:	;select disk given by register c
 		CALL FDC_CONTROL_OUT
 		LD A,C ; 今後の処理のために、もう一度、ドライブ番号をAに入れる。
 
-;		DS	10	;space for disk select
-;	compute proper disk Parameter header address
-;		LD	A,(diskno)
 		LD	L, A	;l=disk number 0, 1, 2, 3
 		LD	H, 0	;high order zero
 		ADD	HL,HL	;*2
@@ -691,7 +634,7 @@ rwmove:
 		RET	NZ	;skip if so
 		XOR	A	;0 to accum
 		LD	(hstwrt),A	;buffer written
-		CALL	writehst
+		CALL writehst
 		LD	A,(erflag)
 		RET
 ;
@@ -1059,6 +1002,7 @@ OPENMSG:
 ;	DB "Copyright 1979 (C) by Digital Research.",CR,LF,00H
 ;
 ;
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
 ; キーボード初期化ルーチン

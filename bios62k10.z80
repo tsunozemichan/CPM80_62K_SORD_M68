@@ -160,7 +160,7 @@ boot:	;simplest case is to just perform parameter initialization
 		CALL SIO_INIT
 		CALL CRT_INIT
 		CALL KBD_INIT
-		CALL CTC_INIT	;initialize CTC
+		; CALL CTC_INIT	;initialize CTC
 		PUSH AF
 		PUSH HL
 		LD HL,OPENMSG
@@ -343,7 +343,7 @@ const:	;console status, return 0ffh if character ready, 00h if not
 ;
 conin:	;console character into register a
 		CALL KEY_SCAN_LAP
-		CALL DELAY_20MS:
+		; CALL DELAY_20MS
 		RET
 ;
 conout:	;console character output from register c
@@ -1446,15 +1446,16 @@ KEY_SCAN_LAP_LOOP:
 	RET
 
 KEY_SCAN:
-	INC C
-	INI ; INIでキーボードポートE0~EFをスキャンする。
-	JR NZ,KEY_SCAN ; Cをインクリメントしていくと、1->2->3...e->f->0となって、スキャン終了となる。
-	LD HL,PORT_INDEX ; キーボードポートの値が入っているメモリアドレスPORT_INDEX~PORT_INDEX+0xFHのポインタを先頭に戻している。
-	LD BC,0FDFH ; DJNZを使うので、B=0xf、C=0xDFにしている。Bがスキャン回数。Cがポート番号
+	; HL=PORT_INDEX, BC=0FDFHは呼び出し元で既に設定済み
+	; INC C
+	; INI ; INIでキーボードポートE0~EFをスキャンする。
+	; JR NZ,KEY_SCAN ; Cをインクリメントしていくと、1->2->3...e->f->0となって、スキャン終了となる。
+	; LD HL,PORT_INDEX ; キーボードポートの値が入っているメモリアドレスPORT_INDEX~PORT_INDEX+0xFHのポインタを先頭に戻している。
+	; LD BC,0FDFH ; DJNZを使うので、B=0xf、C=0xDFにしている。Bがスキャン回数。Cがポート番号
 SCAN_LOOP:
-	INC C ; 初回の処理で、C=0xDF+1=0xE0となる。
+	INC C ; C=0xDF+1=0xE0となる。
 	IN A,(C)
-	AND (HL) ; INIでスキャンした結果と照合。
+	; AND (HL) ; INIでスキャンした結果と照合。
 	LD (HL),A ; 値を、INIで入れたアドレスと同じところに格納する。
 	INC HL ; メモリアドレスをインクリメント。
 	DJNZ SCAN_LOOP ; 16回繰り返す

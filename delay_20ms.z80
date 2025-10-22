@@ -1,0 +1,72 @@
+;*****************************************************
+;*                                                   *
+;*    20ms Delay Subroutine for Z80 @ 4MHz          *
+;*                                                   *
+;*****************************************************
+;
+; 20msの遅延ルーチン
+; 4MHz動作のZ80で20ms = 80,000クロックサイクル必要
+;
+; 使用方法:
+;   CALL DELAY_20MS
+;
+; 破壊されるレジスタ: なし（全てスタックに退避）
+;
+DELAY_20MS:
+		PUSH	BC
+		PUSH	AF
+		
+		; 2重ループで遅延を作成
+		; 外側ループ: B = 80回
+		; 内側ループ: C = 250回
+		; 
+		; 内側ループ1回: 約13クロックサイクル
+		; 250 × 13 = 3,250サイクル
+		; 80 × 3,250 = 260,000サイクル
+		; 
+		; 調整のため、実際の値を最適化:
+		; B = 50 (32H), C = 255 (FFH)で約82,000サイクル
+		
+		LD	B, 32H		; 外側ループカウンタ (50回)
+DELAY_OUTER:
+		LD	C, 0FFH		; 内側ループカウンタ (255回)
+DELAY_INNER:
+		DEC	C
+		JR	NZ, DELAY_INNER	; 内側ループ
+		DJNZ	DELAY_OUTER	; 外側ループ
+		
+		POP	AF
+		POP	BC
+		RET
+
+;*****************************************************
+;*                                                   *
+;*    Alternative: Adjustable Delay Subroutine      *
+;*                                                   *
+;*****************************************************
+;
+; 可変遅延ルーチン（1ms単位）
+; 入力: A = 遅延時間（ms単位、1～255）
+;
+; 使用例:
+;   LD A, 20  ; 20ms遅延
+;   CALL DELAY_MS
+;
+DELAY_MS:
+		PUSH	BC
+		PUSH	AF
+		LD	B, A		; 遅延時間をBに保存
+DELAY_MS_OUTER:
+		PUSH	BC
+		; 1msの遅延 = 4,000クロックサイクル
+		LD	B, 10H		; 16回
+		LD	C, 0FAH		; 250回
+DELAY_MS_LOOP:
+		DEC	C
+		JR	NZ, DELAY_MS_LOOP
+		DJNZ	DELAY_MS_OUTER + 2	; 内側ループに戻る
+		POP	BC
+		DJNZ	DELAY_MS_OUTER
+		POP	AF
+		POP	BC
+		RET

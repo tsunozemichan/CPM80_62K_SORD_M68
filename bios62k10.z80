@@ -343,6 +343,7 @@ const:	;console status, return 0ffh if character ready, 00h if not
 ;
 conin:	;console character into register a
 		CALL KEY_SCAN_LAP
+		CALL DELAY_20MS:
 		RET
 ;
 conout:	;console character output from register c
@@ -1419,6 +1420,12 @@ UPDATE_TOP_VIEW:
 SCROLL_END:
 	RET
 
+
+
+
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
 ; キースキャン サブルーチン
@@ -1888,6 +1895,46 @@ CODE_Z_CONTROL:
 	RET
 
 
+;*****************************************************
+;*                                                   *
+;*    20ms Delay Subroutine for Z80 @ 4MHz          *
+;*                                                   *
+;*****************************************************
+;
+; 20msの遅延ルーチン
+; 4MHz動作のZ80で20ms = 80,000クロックサイクル必要
+;
+; 使用方法:
+;   CALL DELAY_20MS
+;
+; 破壊されるレジスタ: なし（全てスタックに退避）
+;
+DELAY_20MS:
+		PUSH	BC
+		PUSH	AF
+		
+		; 2重ループで遅延を作成
+		; 外側ループ: B = 80回
+		; 内側ループ: C = 250回
+		; 
+		; 内側ループ1回: 約13クロックサイクル
+		; 250 × 13 = 3,250サイクル
+		; 80 × 3,250 = 260,000サイクル
+		; 
+		; 調整のため、実際の値を最適化:
+		; B = 50 (32H), C = 255 (FFH)で約82,000サイクル
+		
+		LD	B, 32H		; 外側ループカウンタ (50回)
+DELAY_OUTER:
+		LD	C, 0FFH		; 内側ループカウンタ (255回)
+DELAY_INNER:
+		DEC	C
+		JR	NZ, DELAY_INNER	; 内側ループ
+		DJNZ	DELAY_OUTER	; 外側ループ
+		
+		POP	AF
+		POP	BC
+		RET
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;

@@ -1,0 +1,346 @@
+FDCCOMMAND	EQU 0C8H
+FDCSTATUS	EQU 0C8H
+FDCTRACK	EQU 0C9H
+FDCSECTOR	EQU 0CAH
+FDCDATA		EQU 0CBH
+FDCCONTROL	EQU 0CDH
+UNKNOWN_C5 	EQU 0C5H
+
+SIOAD	EQU	0F8H		; SIO A CHANNEL DATA
+SIOAC	EQU	0F9H		; SIO A CHANNEL CONTROL
+
+DMA	EQU 0CCH
+
+IO_DE	EQU 0DEH
+IO_CE	EQU 0CEH
+_IO_D3_	EQU 0D3H
+_IO_E2_ EQU 0E2H
+_IO_E3_ EQU 0E3H
+
+READBUF EQU 01500H
+RESULT  EQU 01400H
+
+
+	ORG 0H
+	DI
+START:
+	LD HL,01000H
+	LD SP,HL ; stack pointer
+	LD HL,01700H ; destination address
+	EX DE,HL
+	LD HL,20H ; source address
+	LD BC,400H ; 400H is 1kB
+	LDIR
+	JP MAIN:
+
+	ORG 01700H
+MAIN:
+	;
+	; 0 MEMORY FILL FROM 0 TO 100H
+	;
+	LD HL,0H
+	LD BC,100H
+	LD A,0H
+	CALL MEMORY_FILL
+	;
+	; INITIALIZE SIO
+	;
+	CALL SIO_INIT
+	;
+	LD	A,'S'
+	CALL CONOUT
+	;
+	IN A,(FDCDATA)
+	XOR 0FFH
+	OUT (FDCDATA),A
+	LD B,A
+	EX (SP),HL
+	EX (SP),HL
+	IN A,(FDCDATA)
+	CP B ; IF NOT EQUAL
+	JP NZ,ABORT ; GO ABORT
+	XOR A
+	OUT (FDCCONTROL),A
+	LD A,0D0H ; FORCE INT
+	CALL FDCOUT
+	LD B,30H
+MLOOP1:	DJNZ MLOOP1
+;
+	CALL RESTORE
+;
+	LD	A,'R'
+	CALL CONOUT
+;
+;------------------------------------------------------------
+;  Side 0 process
+;------------------------------------------------------------
+;
+; SEEK
+;
+; FDC \DDENS setting
+;	LD D,24H ; Side 1 & High density mode
+	LD D,04H ; Side 0 & High density mode
+;	LD D,44H ; Side 0 & LOW density mode
+;
+	LD E,07H  ; TARGET TRACK No.7, at CP/M SYS
+;
+DO_SEEK0:
+	CALL SEEK
+	JR Z,GO_DMA0
+	JR DO_SEEK0
+GO_DMA0:
+	LD B,0EH ; LOOP COUNT is 0EH(14) sectors
+	LD D,04H ; FDCCONTROL COMMAND is Side 0 & High density mode
+;
+	LD C,0DH ; INITIAL SECTOR NO. is 0DH(13) to 26 sector reading
+;
+READ_LOOP0:
+	CALL GO_DMA_AND_READ0
+	INC C
+	LD A,(dma_trans_add) ; memory address of DMA transfer address
+	INC A ; 256 byte incriment
+	LD (dma_trans_add),A
+	DJNZ READ_LOOP0
+
+	LD	A,'0'
+	CALL CONOUT
+
+;------------------------------------------------------------
+;  Side 1 process
+;------------------------------------------------------------
+
+;
+; SEEK
+;
+; FDC \DDENS setting
+	LD D,24H ; Side 1 & High density mode
+;	LD D,4H ; Side 0 & High density mode
+;	LD D,44H ; Side 0 & LOW density mode
+;
+;
+	LD E,07H  ; TARGET TRACK No. 7 at CP/M SYS
+;
+;
+DO_SEEK1:
+	CALL SEEK
+	JR Z,GO_DMA1
+	JR DO_SEEK1
+GO_DMA1:
+	LD B,12H ; LOOP COUNT is 12H(18) sectors. 
+	LD D,24H ; FDCCONTROL COMMAND is side 1 & High density mode
+;
+	LD C,01H ; INITIAL SECTOR NO.1 to 12H(18) sector reading
+;
+READ_LOOP1:
+	CALL GO_DMA_AND_READ1
+	INC C
+	LD A,(dma_trans_add)
+	INC A
+	LD (dma_trans_add),A
+	DJNZ READ_LOOP1
+;	LD A,08H
+;	CALL FDCOUT ; FDD is Not ready
+;	LD A,83H
+;	OUT (DMA),A
+	LD	A,'E'
+	CALL CONOUT
+
+;	CALL RESTORE
+;	LD	A,'Z'
+;	CALL CONOUT
+
+	JP 0F200H ; Jump F200H @ 62k memory model. 
+;	HALT
+;
+;
+; ----------------------------------------------------------------
+;
+;
+; FDC COMMAND OUT subroutine
+;
+FDCOUT:
+	OUT (FDCCOMMAND),A
+	LD A,30H
+WLOOP: DEC A
+	JR NZ,WLOOP
+LOOP2:
+	IN A,(FDCSTATUS)
+	BIT 0x0,A ; BUSY IS CLEAR?
+	JR NZ,LOOP2
+	RET
+;
+; RESTORE subroutine
+;
+RESTORE:
+;	LD A,(RESTORE_COUNT)
+;	DEC A
+;	JP Z,ERROR_RESTORE
+;	LD (RESTORE_COUNT),A
+RESTORE_LOOP:
+	LD A,44H ;  \DDENS is HIGH. Low density mode. 
+	OUT (FDCCONTROL),A
+	LD A,0CH ; restore command
+	CALL FDCOUT
+	BIT 7,A ; Not Ready?
+	JR NZ,RESTORE_LOOP
+	AND 98H
+	JR NZ,RESTORE
+	RET
+;
+; SEEK subroutine
+; D is fdccontrol COMMAND
+; if D=0x44 : \DDEN is HIGH. Low density mode. 
+; if D=0x4  : \DDEN is LOW. High density mode. 
+; if D=0x24 : Side 1 and High density mode.
+; E is Track No.
+;
+SEEK:
+	LD A,D
+	OUT (FDCCONTROL),A
+	LD A,E
+	OUT (FDCDATA),A
+	LD A,1CH ; SEEK COMMAND
+	CALL FDCOUT
+	AND 98H
+	RET
+;
+; DMA setting & Go
+; HL is Address of DMA Command chain
+;		but top value is No of DMA Command chain
+DMA_ON:
+	PUSH HL
+	PUSH BC
+	LD B,(HL)
+	INC HL
+	LD C,DMA
+	OTIR
+	POP BC
+	POP HL
+	RET
+;
+; DMA setting & FDD read FOR SIDE 0
+; C is Sector No.
+; D is Control word.
+;
+GO_DMA_AND_READ0:
+	LD A,C
+	OUT (FDCSECTOR),A
+	LD A,D
+	OUT (FDCCONTROL),A
+	LD HL,DMA_COMMANDS
+	CALL DMA_ON
+	AND 20H
+	LD A,82H ; READ DATA COMMAND for Side 0
+;	LD A,8AH ; READ DATA COMMAND for Side 1
+;	JR NZ,DO_FDC0
+;	OR 08H
+DO_FDC0:
+	CALL FDCOUT
+	AND 0FCH
+	RET
+;
+; DMA setting & FDD read FOR SIDE 1
+; C is Sector No.
+; D is Control word.
+;
+GO_DMA_AND_READ1:
+	LD A,C
+	OUT (FDCSECTOR),A
+	LD A,D
+	OUT (FDCCONTROL),A
+	LD HL,DMA_COMMANDS
+	CALL DMA_ON
+	AND 20H
+;	LD A,82H ; READ DATA COMMAND for Side 0
+	LD A,8AH ; READ DATA COMMAND for Side 1
+;	JR NZ,DO_FDC1
+;	OR 08H
+DO_FDC1:
+	CALL FDCOUT
+	AND 0FCH
+	RET
+;
+; ABORT
+;
+ABORT:
+;	LD A,"A"
+;	CALL CONOUT
+	HALT
+;
+; SIO INITIALIZE
+;
+SIO_INIT:
+	;; Initialize SIO
+	IN	A,(SIOAC)
+	;; Reset both Ch.
+	LD	A,18H
+	OUT	(SIOAC),A
+	;; Ch.A WR1
+	LD	A,01H
+	OUT	(SIOAC),A
+	XOR	A
+	OUT	(SIOAC),A
+	;; Ch.A WR4
+	LD	A,04H
+	OUT	(SIOAC),A
+	LD	A,44H		; x16 1 N
+	OUT	(SIOAC),A
+	;; Ch.A WR3
+	LD	A,03H
+	OUT	(SIOAC),A
+	LD	A,0C1H		; 8bit Receiver enable
+	OUT	(SIOAC),A
+	;; Ch.A WR5
+	LD	A,05H
+	OUT	(SIOAC),A
+	LD	A,0EAH		; 8bit Transmitter enable
+	OUT	(SIOAC),A
+	RET
+;
+; CONOUT
+;
+CONOUT:
+	PUSH	AF
+CO0:
+	IN	A,(SIOAC)
+	AND	04H
+	JR	Z,CO0
+	POP	AF
+	OUT	(SIOAD),A
+	RET
+;
+; MEMORY FILL
+;
+MEMORY_FILL:
+	LD (HL),A
+	LD D,H
+	LD E,L
+	INC DE
+	DEC BC
+	LD A,B
+	OR C
+	RET Z
+	LDIR
+	RET
+
+RESTORE_COUNT DB 0FFH
+READ_COUNT DB 0AH
+SEEK_COUNT DB 0AH
+
+
+;
+; DMA command chain Parameters
+;
+	ORG 01830H
+DMA_COMMANDS:
+	DB 15H,0C3H,0C3H,0C3H,0C3H,03CH,0C3H
+	DB 0BBH,01H,9BFH
+	DB 6DH,0CBH,0FFH,00H,02CH,010H,08DH
+	DB 00H
+dma_trans_add:	DB 0DCH ; DC00H IS 62K MEMORY MODEL
+	DB 9AH
+	DB 0CFH,87H
+
+
+
+END

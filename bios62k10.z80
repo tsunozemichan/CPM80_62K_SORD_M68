@@ -265,7 +265,7 @@ INT_20MS:
 		PUSH	HL
 		;
 		; TODO: Add your 20ms interrupt processing here
-		CALL KEY_SCAN_LAP
+		; CALL KEY_SCAN_LAP
 		;
 		POP	HL
 		POP	DE
@@ -320,12 +320,12 @@ gocpm:
 		CALL	setdma
 		
 		; Initialize CTC for 20ms interrupt
-		CALL	CTC_INIT
+		; CALL	CTC_INIT
 		
 		; Set up interrupt mode 2
-		IM	2
-		LD	A,HIGH(INT_20MS)	; Set I register for interrupt vector
-		LD	I,A
+		; IM	2
+		; LD	A,HIGH(INT_20MS)	; Set I register for interrupt vector
+		; LD	I,A
 		
 		EI	;enable the interrupt system
 		LD	A,(cdisk)	;get current disk number
@@ -342,8 +342,8 @@ const:	;console status, return 0ffh if character ready, 00h if not
 		RET
 ;
 conin:	;console character into register a
+		CALL DELAY_20MS
 		CALL KEY_SCAN_LAP
-		; CALL DELAY_20MS
 		RET
 ;
 conout:	;console character output from register c
@@ -1436,6 +1436,7 @@ KEY_SCAN_LAP:
 	PUSH HL
 	PUSH BC
 KEY_SCAN_LAP_LOOP:
+	CALL DELAY_20MS
 	LD HL,PORT_INDEX
 	LD BC,0FDFH
 	CALL KEY_SCAN
@@ -1445,17 +1446,31 @@ KEY_SCAN_LAP_LOOP:
 	POP HL
 	RET
 
+; KEY_SCAN:
+; 	INC C
+; 	INI ; INIでキーボードポートE0~EFをスキャンする。
+; 	JR NZ,KEY_SCAN ; Cをインクリメントしていくと、1->2->3...e->f->0となって、スキャン終了となる。
+; 	LD HL,PORT_INDEX ; キーボードポートの値が入っているメモリアドレスPORT_INDEX~PORT_INDEX+0xFHのポインタを先頭に戻している。
+; 	LD BC,0FDFH ; DJNZを使うので、B=0xf、C=0xDFにしている。Bがスキャン回数。Cがポート番号
+; SCAN_LOOP:
+; 	INC C ; 初回の処理で、C=0xDF+1=0xE0となる。
+; 	IN A,(C)
+; 	AND (HL) ; INIでスキャンした結果と照合。
+; 	LD (HL),A ; 値を、INIで入れたアドレスと同じところに格納する。
+; 	INC HL ; メモリアドレスをインクリメント。
+; 	DJNZ SCAN_LOOP ; 16回繰り返す
+
+; 	LD HL,PORT_INDEX ; メモリアドレスポインタをPORT_INDEXの先頭に戻す。
+; 	LD D,0H ; インデックスを0にする。
+; 	JR KEY_LOOP_1
+; SCAN_LOOP_RETURN:
+; 	RET
+
 KEY_SCAN:
 	; HL=PORT_INDEX, BC=0FDFHは呼び出し元で既に設定済み
-	; INC C
-	; INI ; INIでキーボードポートE0~EFをスキャンする。
-	; JR NZ,KEY_SCAN ; Cをインクリメントしていくと、1->2->3...e->f->0となって、スキャン終了となる。
-	; LD HL,PORT_INDEX ; キーボードポートの値が入っているメモリアドレスPORT_INDEX~PORT_INDEX+0xFHのポインタを先頭に戻している。
-	; LD BC,0FDFH ; DJNZを使うので、B=0xf、C=0xDFにしている。Bがスキャン回数。Cがポート番号
 SCAN_LOOP:
 	INC C ; C=0xDF+1=0xE0となる。
 	IN A,(C)
-	; AND (HL) ; INIでスキャンした結果と照合。
 	LD (HL),A ; 値を、INIで入れたアドレスと同じところに格納する。
 	INC HL ; メモリアドレスをインクリメント。
 	DJNZ SCAN_LOOP ; 16回繰り返す
@@ -1925,7 +1940,7 @@ DELAY_20MS:
 		; 調整のため、実際の値を最適化:
 		; B = 50 (32H), C = 255 (FFH)で約82,000サイクル
 		
-		LD	B, 32H		; 外側ループカウンタ (50回)
+		LD	B, 16H		; 外側ループカウンタ (50回)
 DELAY_OUTER:
 		LD	C, 0FFH		; 内側ループカウンタ (255回)
 DELAY_INNER:

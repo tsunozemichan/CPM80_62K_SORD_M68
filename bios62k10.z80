@@ -1446,31 +1446,16 @@ KEY_SCAN_LAP_LOOP:
 	POP HL
 	RET
 
-; KEY_SCAN:
-; 	INC C
-; 	INI ; INIでキーボードポートE0~EFをスキャンする。
-; 	JR NZ,KEY_SCAN ; Cをインクリメントしていくと、1->2->3...e->f->0となって、スキャン終了となる。
-; 	LD HL,PORT_INDEX ; キーボードポートの値が入っているメモリアドレスPORT_INDEX~PORT_INDEX+0xFHのポインタを先頭に戻している。
-; 	LD BC,0FDFH ; DJNZを使うので、B=0xf、C=0xDFにしている。Bがスキャン回数。Cがポート番号
-; SCAN_LOOP:
-; 	INC C ; 初回の処理で、C=0xDF+1=0xE0となる。
-; 	IN A,(C)
-; 	AND (HL) ; INIでスキャンした結果と照合。
-; 	LD (HL),A ; 値を、INIで入れたアドレスと同じところに格納する。
-; 	INC HL ; メモリアドレスをインクリメント。
-; 	DJNZ SCAN_LOOP ; 16回繰り返す
-
-; 	LD HL,PORT_INDEX ; メモリアドレスポインタをPORT_INDEXの先頭に戻す。
-; 	LD D,0H ; インデックスを0にする。
-; 	JR KEY_LOOP_1
-; SCAN_LOOP_RETURN:
-; 	RET
-
 KEY_SCAN:
-	; HL=PORT_INDEX, BC=0FDFHは呼び出し元で既に設定済み
+	INC C
+	INI ; INIでキーボードポートE0~EFをスキャンする。
+	JR NZ,KEY_SCAN ; Cをインクリメントしていくと、1->2->3...e->f->0となって、スキャン終了となる。
+	LD HL,PORT_INDEX ; キーボードポートの値が入っているメモリアドレスPORT_INDEX~PORT_INDEX+0xFHのポインタを先頭に戻している。
+	LD BC,0FDFH ; DJNZを使うので、B=0xf、C=0xDFにしている。Bがスキャン回数。Cがポート番号
 SCAN_LOOP:
-	INC C ; C=0xDF+1=0xE0となる。
+	INC C ; 初回の処理で、C=0xDF+1=0xE0となる。
 	IN A,(C)
+	AND (HL) ; INIでスキャンした結果と照合。
 	LD (HL),A ; 値を、INIで入れたアドレスと同じところに格納する。
 	INC HL ; メモリアドレスをインクリメント。
 	DJNZ SCAN_LOOP ; 16回繰り返す
@@ -1480,6 +1465,21 @@ SCAN_LOOP:
 	JR KEY_LOOP_1
 SCAN_LOOP_RETURN:
 	RET
+
+; KEY_SCAN:
+; 	; HL=PORT_INDEX, BC=0FDFHは呼び出し元で既に設定済み
+; SCAN_LOOP:
+; 	INC C ; C=0xDF+1=0xE0となる。
+; 	IN A,(C)
+; 	LD (HL),A ; 値を、INIで入れたアドレスと同じところに格納する。
+; 	INC HL ; メモリアドレスをインクリメント。
+; 	DJNZ SCAN_LOOP ; 16回繰り返す
+
+; 	LD HL,PORT_INDEX ; メモリアドレスポインタをPORT_INDEXの先頭に戻す。
+; 	LD D,0H ; インデックスを0にする。
+; 	JR KEY_LOOP_1
+; SCAN_LOOP_RETURN:
+; 	RET
 
 KEY_LOOP_1:
 	LD A, (HL) ; メモリアドレスからキースキャンの値を取り出す。
@@ -1549,6 +1549,7 @@ GET_KEYMAP:
 	LD HL,KEY_MAP
 	LD B,0
 	LD C,A
+	; DEC BC         ; オフセットを1減算して調整
 	ADD HL,BC      ; HL = KEY_MAP + オフセット
 	LD A,(HL)      ; マップされたコードを取得
 	POP BC
@@ -1990,11 +1991,16 @@ KEY_BUFFER:
 ; Keyboard map
 ;
 
+; KEY_MAP:
+; 	DB 0H,'1234567890-=',5CH,08H,0H
+; 	DB 0H,'QWERTYUIOP@',5BH,0DH,0DH,0H
+; 	DB 0H,'ASDFGHJKL',3BH,3AH,5DH,0H,0H,0H
+; 	DB 0H,'ZXCVB',20H,'NM',2CH,2EH,2FH,0H,0H,0H
 KEY_MAP:
-	DB 0H,'1234567890-=',5CH,08H,0H
-	DB 0H,'QWERTYUIOP@',5BH,0DH,0DH,0H
-	DB 0H,'ASDFGHJKL',3BH,3AH,5DH,0H,0H,0H
-	DB 0H,'ZXCVB',20H,'NM',2CH,2EH,2FH,0H,0H,0H
+	DB 0H,0H,'1234567890-=',5CH,08H
+	DB 0H,0H,'QWERTYUIOP',0DH,0DH,0DH,0DH
+	DB 0H,0H,'ASDFGHJKL',3BH,3AH,5DH,0H,0H
+	DB 0H,0H,'ZXCVB',20H,'NM',2CH,2EH,2FH,0H,0H
 
 ;*****************************************************
 ;*                                                   *

@@ -1549,7 +1549,6 @@ GET_KEYMAP:
 	LD HL,KEY_MAP
 	LD B,0
 	LD C,A
-	; DEC BC         ; オフセットを1減算して調整
 	ADD HL,BC      ; HL = KEY_MAP + オフセット
 	LD A,(HL)      ; マップされたコードを取得
 	POP BC
@@ -1999,14 +1998,14 @@ KEY_BUFFER:
 KEY_MAP:
 	; DB 0H,0H,'1234567890-=',5CH,08H
 	; DB "X","Y",'QWERTYUIOP',"Z","V","W","A"
-	DB 08H,0H,'1234567890-',0H,0H,0H
+	DB 08H,0H,'1234567890-',0H,0H,0H ; USBキーボード変換機に未定義コードのせいでマップに00Hが多い。要対応。
 	DB 0DH,09H,'QWERTYUIOP',0H,40H,0H,0H
 	DB 0H,0H,'ASDFGHJKL',3BH,3AH,5DH,0H,0H
 	DB 0H,0H,'ZXCVB',20H,'NM',2CH,2EH,2FH,0H,0H
 
 ;*****************************************************
 ;*                                                   *
-;*	Unitialized RAM data areas		     *
+;*	Unitialized RAM data areas		                 *
 ;*                                                   *
 ;*****************************************************
 ;
